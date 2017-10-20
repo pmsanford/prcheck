@@ -72,7 +72,7 @@ to quickly create a Cobra application.`,
 			openPRs, err := getOpenPRs(client, &ctx, repo)
 			if err != nil {
 				fmt.Printf("Couldn't get %s open PRs: %s\n", repo, err)
-				return
+				continue
 			}
 			for _, PR := range openPRs {
 				pr := *PR
@@ -80,7 +80,7 @@ to quickly create a Cobra application.`,
 				tickets := findJiraTickets(*pr.Title)
 				ticketArray, err := GetTickets(jclient, tickets)
 				if err != nil {
-					fmt.Printf("\t\tError getting tickets: %s", err)
+					fmt.Printf("\t\tError getting tickets: %s\n", err)
 					continue
 				}
 				for _, ticket := range ticketArray {
@@ -98,6 +98,38 @@ to quickly create a Cobra application.`,
 						colorfunc = green
 					}
 					fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
+				}
+			}
+			closedPRs, err := getClosedPRs(client, &ctx, repo)
+			if err != nil {
+				fmt.Printf("Couldn't get %s closed PRs: %s\n", repo, err)
+				continue
+			}
+			for _, PR := range closedPRs {
+				pr := *PR
+				tickets := findJiraTickets(*pr.Title)
+				ticketArray, err := GetTickets(jclient, tickets)
+				if err != nil {
+					fmt.Printf("Error getting tickets for %s: %s\n", *pr.Title, err)
+				}
+				sprintFunc := green
+				sprintLetter := "s"
+				releaseFunc := green
+				releaseLetter := "r"
+				for _, ticket := range ticketArray {
+					if !ticket.HasSprint() {
+						sprintFunc = red
+						sprintLetter = "n"
+					}
+					if !ticket.HasReleaseVersion() {
+						releaseFunc = red
+						releaseLetter = "n"
+					}
+				}
+				if len(ticketArray) > 0 {
+					fmt.Printf("%d: %s %s %s\n", *pr.Number, sprintFunc(sprintLetter), releaseFunc(releaseLetter), *pr.Title)
+				} else {
+					fmt.Printf("%d: %s %s\n", *pr.Number, red("NO TICKETS"), *pr.Title)
 				}
 			}
 		}
@@ -179,6 +211,16 @@ func getOpenPRs(client *github.Client, ctx *context.Context, repo string) ([]*gi
 		State: "open",
 	}
 	opt.PerPage = 100
+	return getPRs(client, ctx, repo, opt)
+}
+
+func getClosedPRs(client *github.Client, ctx *context.Context, repo string) ([]*github.PullRequest, error) {
+	opt := &github.PullRequestListOptions{
+		State:     "closed",
+		Sort:      "updated",
+		Direction: "desc",
+	}
+	opt.PerPage = 20
 	return getPRs(client, ctx, repo, opt)
 }
 
