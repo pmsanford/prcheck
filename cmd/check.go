@@ -129,7 +129,7 @@ to quickly create a Cobra application.`,
 				if len(ticketArray) > 0 {
 					fmt.Printf("%d: %s %s %s\n", *pr.Number, sprintFunc(sprintLetter), releaseFunc(releaseLetter), *pr.Title)
 				} else {
-					fmt.Printf("%d: %s %s\n", *pr.Number, red("NO TICKETS"), *pr.Title)
+					fmt.Printf("%d: %s %s\n", *pr.Number, red("---"), *pr.Title)
 				}
 			}
 		}
