@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 
 	// For github oauth library
 	_ "golang.org/x/oauth2/github"
@@ -80,11 +81,41 @@ to quickly create a Cobra application.`,
 						fmt.Printf("\t\tError getting issue %s: %s\n", ticket, err)
 					} else {
 						fmt.Printf("\t\tTitle: %s\n", issue.Fields.Summary)
+						fmt.Printf("\t\tRelease Version: %+v\n", issue.Fields.FixVersions)
+						sprints, _ := issue.Fields.Unknowns.Array("customfield_10006")
+						var sprintarr []Sprint
+						if len(sprints) > 0 {
+							sprintarr = make([]Sprint, len(sprints))
+							for k := range sprints {
+								sprintarr[k], _ = ParseSprint(sprints[k].(string))
+							}
+						}
+						fmt.Printf("\t\tSprints: %+v\n", sprintarr)
 					}
 				}
 			}
 		}
 	},
+}
+
+func ParseSprint(input string) (Sprint, error) {
+	idre := regexp.MustCompile("id=([0-9]+),")
+	idstrings := idre.FindStringSubmatch(input)
+	spr := Sprint{ID: 0, Name: "", State: ""}
+	spr.ID, _ = strconv.Atoi(idstrings[1])
+	namre := regexp.MustCompile("name=([^,]+),")
+	namestrings := namre.FindStringSubmatch(input)
+	spr.Name = namestrings[1]
+	statere := regexp.MustCompile("state=([A-Z]+),")
+	statestrings := statere.FindStringSubmatch(input)
+	spr.State = statestrings[1]
+	return spr, nil
+}
+
+type Sprint struct {
+	ID    int
+	Name  string
+	State string
 }
 
 func findJiraTickets(PRTitle string) []string {
