@@ -24,6 +24,7 @@ import (
 	_ "golang.org/x/oauth2/github"
 
 	"github.com/andygrunwald/go-jira"
+	"github.com/fatih/color"
 	"github.com/google/go-github/github"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -55,6 +56,9 @@ to quickly create a Cobra application.`,
 		)
 		tc := oauth2.NewClient(ctx, ts)
 
+		green := color.New(color.FgGreen).SprintFunc()
+		red := color.New(color.FgRed).SprintFunc()
+
 		client := github.NewClient(tc)
 		jclient, err := jira.NewClient(nil, "https://upguard.atlassian.net")
 		jclient.Authentication.SetBasicAuth(viper.GetString("jira-username"), viper.GetString("jira-password"))
@@ -65,7 +69,7 @@ to quickly create a Cobra application.`,
 
 		repos := viper.GetStringSlice("repos")
 		for _, repo := range repos {
-			goPRs, err := getPRs(client, &ctx, repo)
+			goPRs, err := getOpenPRs(client, &ctx, repo)
 			if err != nil {
 				fmt.Printf("Couldn't get %s PRs: %s\n", repo, err)
 				return
@@ -81,16 +85,29 @@ to quickly create a Cobra application.`,
 						fmt.Printf("\t\tError getting issue %s: %s\n", ticket, err)
 					} else {
 						fmt.Printf("\t\tTitle: %s\n", issue.Fields.Summary)
-						fmt.Printf("\t\tRelease Version: %+v\n", issue.Fields.FixVersions)
+						colorfunc := red
+						if len(issue.Fields.FixVersions) > 0 {
+							colorfunc = green
+						}
+						fmt.Printf("\t\tRelease Version: %+v\n", colorfunc(issue.Fields.FixVersions))
 						sprints, _ := issue.Fields.Unknowns.Array("customfield_10006")
-						var sprintarr []Sprint
+						var currentSprint *Sprint
 						if len(sprints) > 0 {
-							sprintarr = make([]Sprint, len(sprints))
 							for k := range sprints {
-								sprintarr[k], _ = ParseSprint(sprints[k].(string))
+								newspr, _ := ParseSprint(sprints[k].(string))
+								if newspr.State == "ACTIVE" {
+									currentSprint = &newspr
+									break
+								}
 							}
 						}
-						fmt.Printf("\t\tSprints: %+v\n", sprintarr)
+						sprintName := "NONE"
+						colorfunc = red
+						if currentSprint != nil {
+							sprintName = currentSprint.Name
+							colorfunc = green
+						}
+						fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
 					}
 				}
 			}
@@ -128,7 +145,7 @@ func findJiraTickets(PRTitle string) []string {
 	return tickets
 }
 
-func getPRs(client *github.Client, ctx *context.Context, repo string) ([]*github.PullRequest, error) {
+func getOpenPRs(client *github.Client, ctx *context.Context, repo string) ([]*github.PullRequest, error) {
 	opt := &github.PullRequestListOptions{
 		State: "open",
 	}
