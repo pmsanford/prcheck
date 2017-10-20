@@ -67,69 +67,84 @@ to quickly create a Cobra application.`,
 			return
 		}
 
+		closed := true
+		open := true
+		if len(args) > 0 {
+			if args[0] == "closed" {
+				open = false
+			}
+			if args[0] == "open" {
+				closed = false
+			}
+		}
+
 		repos := viper.GetStringSlice("repos")
 		for _, repo := range repos {
-			openPRs, err := getOpenPRs(client, &ctx, repo)
-			if err != nil {
-				fmt.Printf("Couldn't get %s open PRs: %s\n", repo, err)
-				continue
-			}
-			for _, PR := range openPRs {
-				pr := *PR
-				fmt.Printf("%s\n", *pr.Title)
-				tickets := findJiraTickets(*pr.Title)
-				ticketArray, err := GetTickets(jclient, tickets)
+			if open {
+				openPRs, err := getOpenPRs(client, &ctx, repo)
 				if err != nil {
-					fmt.Printf("\t\tError getting tickets: %s\n", err)
+					fmt.Printf("Couldn't get %s open PRs: %s\n", repo, err)
 					continue
 				}
-				for _, ticket := range ticketArray {
-					fmt.Printf("\tTicket: %s\n", ticket.Number)
-					fmt.Printf("\t\tTitle: %s\n", ticket.Issue.Fields.Summary)
-					colorfunc := red
-					if ticket.HasReleaseVersion() {
-						colorfunc = green
+				for _, PR := range openPRs {
+					pr := *PR
+					fmt.Printf("%s\n", *pr.Title)
+					tickets := findJiraTickets(*pr.Title)
+					ticketArray, err := GetTickets(jclient, tickets)
+					if err != nil {
+						fmt.Printf("\t\tError getting tickets: %s\n", err)
+						continue
 					}
-					fmt.Printf("\t\tRelease Version: %+v\n", colorfunc(ticket.Issue.Fields.FixVersions))
-					sprintName := "NONE"
-					colorfunc = red
-					if ticket.HasSprint() {
-						sprintName = ticket.CurrentSprint.Name
-						colorfunc = green
+					for _, ticket := range ticketArray {
+						fmt.Printf("\tTicket: %s\n", ticket.Number)
+						fmt.Printf("\t\tTitle: %s\n", ticket.Issue.Fields.Summary)
+						colorfunc := red
+						if ticket.HasReleaseVersion() {
+							colorfunc = green
+						}
+						fmt.Printf("\t\tRelease Version: %+v\n", colorfunc(ticket.Issue.Fields.FixVersions))
+						sprintName := "NONE"
+						colorfunc = red
+						if ticket.HasSprint() {
+							sprintName = ticket.CurrentSprint.Name
+							colorfunc = green
+						}
+						fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
 					}
-					fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
 				}
 			}
-			closedPRs, err := getClosedPRs(client, &ctx, repo)
-			if err != nil {
-				fmt.Printf("Couldn't get %s closed PRs: %s\n", repo, err)
-				continue
-			}
-			for _, PR := range closedPRs {
-				pr := *PR
-				tickets := findJiraTickets(*pr.Title)
-				ticketArray, err := GetTickets(jclient, tickets)
+			if closed {
+				closedPRs, err := getClosedPRs(client, &ctx, repo)
 				if err != nil {
-					fmt.Printf("Error getting tickets for %s: %s\n", *pr.Title, err)
+					fmt.Printf("Couldn't get %s closed PRs: %s\n", repo, err)
+					continue
 				}
-				sprintFunc := green
-				sprintLetter := "s"
-				releaseFunc := green
-				releaseLetter := "r"
-				for _, ticket := range ticketArray {
-					if !ticket.HasSprint() {
-						sprintFunc = red
-						sprintLetter = "n"
+				for _, PR := range closedPRs {
+					pr := *PR
+					tickets := findJiraTickets(*pr.Title)
+					ticketArray, err := GetTickets(jclient, tickets)
+					if err != nil {
+						fmt.Printf("Error getting tickets for %s: %s\n", *pr.Title, err)
 					}
-					if !ticket.HasReleaseVersion() {
-						releaseFunc = red
-						releaseLetter = "n"
+					sprintFunc := green
+					sprintLetter := "s"
+					releaseFunc := green
+					releaseLetter := "r"
+					for _, ticket := range ticketArray {
+						if !ticket.HasSprint() {
+							sprintFunc = red
+							sprintLetter = "n"
+						}
+						if !ticket.HasReleaseVersion() {
+							releaseFunc = red
+							releaseLetter = "n"
+						}
 					}
-				}
-				if len(ticketArray) > 0 {
-					fmt.Printf("%d: %s %s %s\n", *pr.Number, sprintFunc(sprintLetter), releaseFunc(releaseLetter), *pr.Title)
-				} else {
-					fmt.Printf("%d: %s %s\n", *pr.Number, red("---"), *pr.Title)
+					if len(ticketArray) > 0 {
+						fmt.Printf("%d: %s %s %s\n", *pr.Number, sprintFunc(sprintLetter), releaseFunc(releaseLetter), *pr.Title)
+					} else {
+						fmt.Printf("%d: %s %s\n", *pr.Number, red("---"), *pr.Title)
+					}
 				}
 			}
 		}
@@ -220,7 +235,7 @@ func getClosedPRs(client *github.Client, ctx *context.Context, repo string) ([]*
 		Sort:      "updated",
 		Direction: "desc",
 	}
-	opt.PerPage = 20
+	opt.PerPage = closedNum
 	return getPRs(client, ctx, repo, opt)
 }
 
@@ -231,6 +246,8 @@ func getPRs(client *github.Client, ctx *context.Context, repo string, opt *githu
 	}
 	return PRs, nil
 }
+
+var closedNum int
 
 func init() {
 	RootCmd.AddCommand(checkCmd)
@@ -244,4 +261,5 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// checkCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	checkCmd.Flags().IntVarP(&closedNum, "closed_number", "c", 10, "Number of closed PRs to retrieve per repo")
 }
