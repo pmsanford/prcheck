@@ -69,50 +69,79 @@ to quickly create a Cobra application.`,
 
 		repos := viper.GetStringSlice("repos")
 		for _, repo := range repos {
-			goPRs, err := getOpenPRs(client, &ctx, repo)
+			openPRs, err := getOpenPRs(client, &ctx, repo)
 			if err != nil {
-				fmt.Printf("Couldn't get %s PRs: %s\n", repo, err)
+				fmt.Printf("Couldn't get %s open PRs: %s\n", repo, err)
 				return
 			}
-			for _, PR := range goPRs {
+			for _, PR := range openPRs {
 				pr := *PR
 				fmt.Printf("%s\n", *pr.Title)
 				tickets := findJiraTickets(*pr.Title)
-				fmt.Printf("\tTickets: %+v\n", tickets)
-				for _, ticket := range tickets {
-					issue, _, err := jclient.Issue.Get(ticket, nil)
-					if err != nil {
-						fmt.Printf("\t\tError getting issue %s: %s\n", ticket, err)
-					} else {
-						fmt.Printf("\t\tTitle: %s\n", issue.Fields.Summary)
-						colorfunc := red
-						if len(issue.Fields.FixVersions) > 0 {
-							colorfunc = green
-						}
-						fmt.Printf("\t\tRelease Version: %+v\n", colorfunc(issue.Fields.FixVersions))
-						sprints, _ := issue.Fields.Unknowns.Array("customfield_10006")
-						var currentSprint *Sprint
-						if len(sprints) > 0 {
-							for k := range sprints {
-								newspr, _ := ParseSprint(sprints[k].(string))
-								if newspr.State == "ACTIVE" {
-									currentSprint = &newspr
-									break
-								}
-							}
-						}
-						sprintName := "NONE"
-						colorfunc = red
-						if currentSprint != nil {
-							sprintName = currentSprint.Name
-							colorfunc = green
-						}
-						fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
+				ticketArray, err := GetTickets(jclient, tickets)
+				if err != nil {
+					fmt.Printf("\t\tError getting tickets: %s", err)
+					continue
+				}
+				for _, ticket := range ticketArray {
+					fmt.Printf("\tTicket: %s\n", ticket.Number)
+					fmt.Printf("\t\tTitle: %s\n", ticket.Issue.Fields.Summary)
+					colorfunc := red
+					if ticket.HasReleaseVersion() {
+						colorfunc = green
 					}
+					fmt.Printf("\t\tRelease Version: %+v\n", colorfunc(ticket.Issue.Fields.FixVersions))
+					sprintName := "NONE"
+					colorfunc = red
+					if ticket.HasSprint() {
+						sprintName = ticket.CurrentSprint.Name
+						colorfunc = green
+					}
+					fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
 				}
 			}
 		}
 	},
+}
+
+func GetTickets(jclient *jira.Client, numbers []string) ([]Ticket, error) {
+	var tickets []Ticket
+	for _, number := range numbers {
+		tck := Ticket{Number: number}
+		issue, _, err := jclient.Issue.Get(number, nil)
+		if err != nil {
+			return nil, err
+		}
+		tck.Issue = *issue
+		sprints, err := issue.Fields.Unknowns.Array("customfield_10006")
+		if err != nil {
+			return nil, err
+		}
+		for _, spr := range sprints {
+			sprint, _ := ParseSprint(spr.(string))
+			if sprint.State == "ACTIVE" {
+				tck.CurrentSprint = &sprint
+			}
+			tck.Sprints = append(tck.Sprints, sprint)
+		}
+		tickets = append(tickets, tck)
+	}
+	return tickets, nil
+}
+
+type Ticket struct {
+	Number        string
+	Issue         jira.Issue
+	Sprints       []Sprint
+	CurrentSprint *Sprint
+}
+
+func (t Ticket) HasSprint() bool {
+	return t.CurrentSprint != nil
+}
+
+func (t Ticket) HasReleaseVersion() bool {
+	return len(t.Issue.Fields.FixVersions) > 0
 }
 
 func ParseSprint(input string) (Sprint, error) {
@@ -150,6 +179,10 @@ func getOpenPRs(client *github.Client, ctx *context.Context, repo string) ([]*gi
 		State: "open",
 	}
 	opt.PerPage = 100
+	return getPRs(client, ctx, repo, opt)
+}
+
+func getPRs(client *github.Client, ctx *context.Context, repo string, opt *github.PullRequestListOptions) ([]*github.PullRequest, error) {
 	PRs, _, err := client.PullRequests.List(*ctx, viper.GetString("organization"), repo, opt)
 	if err != nil {
 		return nil, err
