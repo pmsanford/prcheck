@@ -22,6 +22,7 @@ import (
 	// For github oauth library
 	_ "golang.org/x/oauth2/github"
 
+	"github.com/andygrunwald/go-jira"
 	"github.com/google/go-github/github"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -39,29 +40,48 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if !viper.IsSet("username") || !viper.IsSet("token") || !viper.IsSet("organization") || !viper.IsSet("repos") {
-			fmt.Println("Need a username and token in config.")
+		if !viper.IsSet("github-username") || !viper.IsSet("github-token") || !viper.IsSet("organization") || !viper.IsSet("repos") {
+			fmt.Println("github config info needed")
+			return
+		}
+		if !viper.IsSet("jira-username") || !viper.IsSet("jira-password") {
+			fmt.Println("jira info is needed")
 			return
 		}
 		ctx := context.Background()
 		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: viper.GetString("token")},
+			&oauth2.Token{AccessToken: viper.GetString("github-token")},
 		)
 		tc := oauth2.NewClient(ctx, ts)
 
 		client := github.NewClient(tc)
+		jclient, err := jira.NewClient(nil, "https://upguard.atlassian.net")
+		jclient.Authentication.SetBasicAuth(viper.GetString("jira-username"), viper.GetString("jira-password"))
+		if err != nil {
+			fmt.Printf("Couldn't get JIRA client: %s\n", err)
+			return
+		}
 
 		repos := viper.GetStringSlice("repos")
 		for _, repo := range repos {
 			goPRs, err := getPRs(client, &ctx, repo)
 			if err != nil {
-				fmt.Printf("Couldn't get %s PRs: %s", repo, err)
+				fmt.Printf("Couldn't get %s PRs: %s\n", repo, err)
 				return
 			}
 			for _, PR := range goPRs {
 				pr := *PR
 				fmt.Printf("%s\n", *pr.Title)
-				fmt.Printf("\tTickets: %+v\n", findJiraTickets(*pr.Title))
+				tickets := findJiraTickets(*pr.Title)
+				fmt.Printf("\tTickets: %+v\n", tickets)
+				for _, ticket := range tickets {
+					issue, _, err := jclient.Issue.Get(ticket, nil)
+					if err != nil {
+						fmt.Printf("\t\tError getting issue %s: %s\n", ticket, err)
+					} else {
+						fmt.Printf("\t\tTitle: %s\n", issue.Fields.Summary)
+					}
+				}
 			}
 		}
 	},
