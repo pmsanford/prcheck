@@ -47,9 +47,9 @@ to quickly create a Cobra application.`,
 			fmt.Println("github-username, github-token, organization, repos (list)")
 			return
 		}
-		if !viper.IsSet("jira-username") || !viper.IsSet("jira-password") || !viper.IsSet("jira-url") {
+		if !viper.IsSet("jira-username") || !viper.IsSet("jira-password") || !viper.IsSet("jira-url") || !viper.IsSet("jira-sprint-field") {
 			fmt.Println("jira info is needed")
-			fmt.Println("jira-username, jira-password, and jira-url")
+			fmt.Println("jira-username, jira-password, and jira-url, jira-sprint-field")
 			return
 		}
 		ctx := context.Background()
@@ -168,7 +168,7 @@ func GetTickets(jclient *jira.Client, numbers []string) ([]Ticket, error) {
 			return nil, err
 		}
 		tck.Issue = *issue
-		sprints, err := issue.Fields.Unknowns.Array("customfield_10006")
+		sprints, err := issue.Fields.Unknowns.Array(viper.GetString("jira-sprint-field"))
 		if err != nil {
 			return nil, err
 		}
