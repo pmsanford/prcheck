@@ -1,0 +1,10 @@
+github-username: pmsanford
+github-token: 5353535353ababababcdcdcdcdefefefefefghgh
+organization: EvilCorp
+repos:
+  - ghoul_tracker
+  - cat-ctl
+jira-url: https://hell.atlassian.net
+jira-username: me@paulsanford.net
+jira-password: Muahaha.haha.ha!
+jira-sprint-field: customfield_10013
