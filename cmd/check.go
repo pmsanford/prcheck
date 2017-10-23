@@ -58,6 +58,7 @@ to quickly create a Cobra application.`,
 
 		green := color.New(color.FgGreen).SprintFunc()
 		red := color.New(color.FgRed).SprintFunc()
+		yellow := color.New(color.FgYellow).SprintFunc()
 
 		client := github.NewClient(tc)
 		jclient, err := jira.NewClient(nil, "https://upguard.atlassian.net")
@@ -132,8 +133,13 @@ to quickly create a Cobra application.`,
 					releaseLetter := "r"
 					for _, ticket := range ticketArray {
 						if !ticket.HasSprint() {
-							sprintFunc = red
-							sprintLetter = "n"
+							if len(ticket.Sprints) > 0 {
+								sprintFunc = yellow
+								sprintLetter = "c"
+							} else {
+								sprintFunc = red
+								sprintLetter = "n"
+							}
 						}
 						if !ticket.HasReleaseVersion() {
 							releaseFunc = red
