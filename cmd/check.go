@@ -1,4 +1,4 @@
-// Copyright © 2017 NAME HERE <EMAIL ADDRESS>
+// Copyright © 2017 Paul Sanford <me@paulsanford.net>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,16 +31,20 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// checkCmd represents the check command
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Runs full suite of checks against PRs",
+	Long: `This commands retrieves all open PRs and the last 20 closed ones. It checks for three things:
+* If the PR has a JIRA ticket number in the title somewhere
+* If the associated JIRA tickets have release versions
+* If the associated JIRA tickets are in sprints
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+Active PRs get a long-form display with ticket names, release versions, and sprints spelled out.
+Closed PRs get one line with the PR title, whether the tickets have a sprint or release associated.
+For closed PRs, the lines will display a green s for active sprint, yellow c for closed sprint, or red n
+for no sprint. They will also display a green r for release version or red n for no release version.
+
+You can specify 'closed' to only check closed PRs and 'open' to only check open PRs.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if !viper.IsSet("github-username") || !viper.IsSet("github-token") || !viper.IsSet("organization") || !viper.IsSet("repos") {
 			fmt.Println("github config info needed")
@@ -260,14 +264,5 @@ var closedNum int
 func init() {
 	RootCmd.AddCommand(checkCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// checkCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// checkCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	checkCmd.Flags().IntVarP(&closedNum, "closed_number", "c", 10, "Number of closed PRs to retrieve per repo")
 }
