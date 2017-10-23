@@ -44,10 +44,12 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if !viper.IsSet("github-username") || !viper.IsSet("github-token") || !viper.IsSet("organization") || !viper.IsSet("repos") {
 			fmt.Println("github config info needed")
+			fmt.Println("github-username, github-token, organization, repos (list)")
 			return
 		}
-		if !viper.IsSet("jira-username") || !viper.IsSet("jira-password") {
+		if !viper.IsSet("jira-username") || !viper.IsSet("jira-password") || !viper.IsSet("jira-url") {
 			fmt.Println("jira info is needed")
+			fmt.Println("jira-username, jira-password, and jira-url")
 			return
 		}
 		ctx := context.Background()
@@ -61,7 +63,7 @@ to quickly create a Cobra application.`,
 		yellow := color.New(color.FgYellow).SprintFunc()
 
 		client := github.NewClient(tc)
-		jclient, err := jira.NewClient(nil, "https://upguard.atlassian.net")
+		jclient, err := jira.NewClient(nil, viper.GetString("jira-url"))
 		jclient.Authentication.SetBasicAuth(viper.GetString("jira-username"), viper.GetString("jira-password"))
 		if err != nil {
 			fmt.Printf("Couldn't get JIRA client: %s\n", err)
