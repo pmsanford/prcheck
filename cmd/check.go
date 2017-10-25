@@ -31,6 +31,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var green = color.New(color.FgGreen).SprintFunc()
+var red = color.New(color.FgRed).SprintFunc()
+var yellow = color.New(color.FgYellow).SprintFunc()
+
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Runs full suite of checks against PRs",
@@ -61,10 +65,6 @@ You can specify 'closed' to only check closed PRs and 'open' to only check open 
 			&oauth2.Token{AccessToken: viper.GetString("github-token")},
 		)
 		tc := oauth2.NewClient(ctx, ts)
-
-		green := color.New(color.FgGreen).SprintFunc()
-		red := color.New(color.FgRed).SprintFunc()
-		yellow := color.New(color.FgYellow).SprintFunc()
 
 		client := github.NewClient(tc)
 		jclient, err := jira.NewClient(nil, viper.GetString("jira-url"))
@@ -103,20 +103,7 @@ You can specify 'closed' to only check closed PRs and 'open' to only check open 
 						continue
 					}
 					for _, ticket := range ticketArray {
-						fmt.Printf("\tTicket: %s\n", ticket.Number)
-						fmt.Printf("\t\tTitle: %s\n", ticket.Issue.Fields.Summary)
-						colorfunc := red
-						if ticket.HasReleaseVersion() {
-							colorfunc = green
-						}
-						fmt.Printf("\t\tRelease Version: %+v\n", colorfunc(ticket.Issue.Fields.FixVersions))
-						sprintName := "NONE"
-						colorfunc = red
-						if ticket.HasSprint() {
-							sprintName = ticket.CurrentSprint.Name
-							colorfunc = green
-						}
-						fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
+						printTicketDetails(&ticket)
 					}
 				}
 			}
@@ -133,34 +120,55 @@ You can specify 'closed' to only check closed PRs and 'open' to only check open 
 					if err != nil {
 						fmt.Printf("Error getting tickets for %s: %s\n", *pr.Title, err)
 					}
-					sprintFunc := green
-					sprintLetter := "s"
-					releaseFunc := green
-					releaseLetter := "r"
-					for _, ticket := range ticketArray {
-						if !ticket.HasSprint() {
-							if len(ticket.Sprints) > 0 {
-								sprintFunc = yellow
-								sprintLetter = "c"
-							} else {
-								sprintFunc = red
-								sprintLetter = "n"
-							}
-						}
-						if !ticket.HasReleaseVersion() {
-							releaseFunc = red
-							releaseLetter = "n"
-						}
-					}
-					if len(ticketArray) > 0 {
-						fmt.Printf("%d: %s %s %s\n", *pr.Number, sprintFunc(sprintLetter), releaseFunc(releaseLetter), *pr.Title)
-					} else {
-						fmt.Printf("%d: %s %s\n", *pr.Number, red("---"), *pr.Title)
-					}
+					printTicketSummary(pr, ticketArray)
 				}
 			}
 		}
 	},
+}
+
+func printTicketSummary(pr github.PullRequest, ticketArray []Ticket) {
+	sprintFunc := green
+	sprintLetter := "s"
+	releaseFunc := green
+	releaseLetter := "r"
+	for _, ticket := range ticketArray {
+		if !ticket.HasSprint() {
+			if len(ticket.Sprints) > 0 {
+				sprintFunc = yellow
+				sprintLetter = "c"
+			} else {
+				sprintFunc = red
+				sprintLetter = "n"
+			}
+		}
+		if !ticket.HasReleaseVersion() {
+			releaseFunc = red
+			releaseLetter = "n"
+		}
+	}
+	if len(ticketArray) > 0 {
+		fmt.Printf("%d: %s %s %s\n", *pr.Number, sprintFunc(sprintLetter), releaseFunc(releaseLetter), *pr.Title)
+	} else {
+		fmt.Printf("%d: %s %s\n", *pr.Number, red("---"), *pr.Title)
+	}
+}
+
+func printTicketDetails(ticket *Ticket) {
+	fmt.Printf("\tTicket: %s\n", ticket.Number)
+	fmt.Printf("\t\tTitle: %s\n", ticket.Issue.Fields.Summary)
+	colorfunc := red
+	if ticket.HasReleaseVersion() {
+		colorfunc = green
+	}
+	fmt.Printf("\t\tRelease Version: %+v\n", colorfunc(ticket.Issue.Fields.FixVersions))
+	sprintName := "NONE"
+	colorfunc = red
+	if ticket.HasSprint() {
+		sprintName = ticket.CurrentSprint.Name
+		colorfunc = green
+	}
+	fmt.Printf("\t\tCurrent Sprint: %s\n", colorfunc(sprintName))
 }
 
 func GetTickets(jclient *jira.Client, numbers []string) ([]Ticket, error) {
